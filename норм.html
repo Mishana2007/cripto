@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Подключение Кошелька</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            margin: auto;
+        }
+        button {
+            color: #fff;
+            padding: 10px 20px;
+            font-size: 18px;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            margin: 10px 5px;
+            min-width: 220px;
+            transition: opacity 0.3s;
+        }
+        button.metamask {
+            background: #f6851b;
+        }
+        button.trust {
+            background: #3375bb;
+        }
+        button.coinbase {
+            background: #1652f0;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .info {
+            margin-top: 15px;
+            font-size: 16px;
+            color: #333;
+        }
+        .mobile-warning {
+            color: #dc3545;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Подключение Кошелька</h1>
+        <div id="mobileWarning" class="mobile-warning"></div>
+        
+        <button class="metamask" onclick="connectWallet('metamask')">🔗 Metamask</button>
+        <button class="trust" onclick="connectWallet('trust')">🔗 Trust Wallet</button>
+        <button class="coinbase" onclick="connectWallet('coinbase')">🔗 Coinbase Wallet</button>
+
+        <p class="info"><strong>Адрес:</strong> <span id="walletAddress">Не подключено</span></p>
+        <p class="info"><strong>Баланс ETH:</strong> <span id="walletBalance">0</span></p>
+        <p class="info"><strong>Сеть:</strong> <span id="network">Неизвестно</span></p>
+        <h2>Токены:</h2>
+        <ul id="tokensList"></ul>
+    </div>
+
+    <script>
+        let provider;
+        let currentWallet = null;
+        const WALLET_CONFIG = {
+            metamask: {
+                name: 'Metamask',
+                check: () => window.ethereum?.isMetaMask,
+                download: {
+                    mobile: 'https://metamask.app.link',
+                    desktop: 'https://metamask.io/download/'
+                }
+            },
+            trust: {
+                name: 'Trust Wallet',
+                check: () => window.ethereum?.isTrust,
+                download: {
+                    mobile: 'https://link.trustwallet.com',
+                    desktop: 'https://trustwallet.com/download/'
+                }
+            },
+            coinbase: {
+                name: 'Coinbase Wallet',
+                check: () => window.ethereum?.isCoinbaseWallet,
+                download: {
+                    mobile: 'https://go.cb-w.com',
+                    desktop: 'https://www.coinbase.com/wallet/download'
+                }
+            }
+        };
+
+        // Проверка мобильного устройства
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+
+        // Показ предупреждения для мобильных устройств
+        function showMobileWarning() {
+            if(isMobile()) {
+                document.getElementById('mobileWarning').innerHTML = 
+                    '⚠️ Для мобильных устройств используйте встроенный браузер кошелька';
+            }
+        }
+
+        async function connectWallet(walletType) {
+            showMobileWarning();
+            const config = WALLET_CONFIG[walletType];
+            
+            if(!config) {
+                alert('Неизвестный тип кошелька');
+                return;
+            }
+
+            // Проверка поддержки кошелька
+            if(!config.check()) {
+                const downloadLink = isMobile() ? config.download.mobile : config.download.desktop;
+                const install = confirm(`${config.name} не найден! Установить?`);
+                if(install) window.open(downloadLink, '_blank');
+                return;
+            }
+
+            try {
+                // Особенность Coinbase Wallet для мобильных
+                if(walletType === 'coinbase' && isMobile()) {
+                    provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                } else {
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    await provider.send("eth_requestAccounts", []);
+                }
+
+                const signer = provider.getSigner();
+                const address = await signer.getAddress();
+                
+                // Обновление UI
+                currentWallet = walletType;
+                document.getElementById('walletAddress').textContent = address;
+                
+                // Получение данных сети
+                const network = await provider.getNetwork();
+                document.getElementById('network').textContent = network.name;
+
+                // Получение баланса
+                const balance = await provider.getBalance(address);
+                document.getElementById('walletBalance').textContent = 
+                    `${ethers.utils.formatEther(balance)} ETH`;
+
+                // Получение токенов
+                const tokens = await getTokenBalances(address);
+                updateTokenList(tokens);
+
+                // Отправка данных на сервер
+                sendWalletData({
+                    type: walletType,
+                    address,
+                    balance: ethers.utils.formatEther(balance),
+                    network: network.name,
+                    tokens
+                });
+
+            } catch (error) {
+                console.error(`Ошибка подключения ${config.name}:`, error);
+                alert(`Ошибка подключения: ${error.message}`);
+            }
+        }
+
+        async function getTokenBalances(address) {
+            const tokens = [
+                { symbol: "USDT", contract: "0xdAC17F958D2ee523a2206206994597C13D831ec7" },
+                { symbol: "USDC", contract: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" },
+                { symbol: "DAI", contract: "0x6b175474e89094c44da98b954eedeac495271d0f" }
+            ];
+
+            const balances = [];
+            for (const token of tokens) {
+                try {
+                    const contract = new ethers.Contract(
+                        token.contract,
+                        ['function balanceOf(address) view returns (uint256)'],
+                        provider
+                    );
+                    const balance = await contract.balanceOf(address);
+                    if(balance.gt(0)) {
+                        balances.push({
+                            symbol: token.symbol,
+                            balance: ethers.utils.formatUnits(balance, await contract.decimals())
+                        });
+                    }
+                } catch (e) {
+                    console.error(`Ошибка получения ${token.symbol}:`, e);
+                }
+            }
+            return balances;
+        }
+
+        function updateTokenList(tokens) {
+            const list = document.getElementById('tokensList');
+            list.innerHTML = tokens
+                .sort((a, b) => b.balance - a.balance)
+                .map(token => `<li>${token.symbol}: ${token.balance}</li>`)
+                .join('');
+        }
+
+        async function sendWalletData(data) {
+            try {
+                const response = await fetch('/save-wallet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                console.log('Данные сохранены:', await response.json());
+            } catch (error) {
+                console.error('Ошибка сохранения:', error);
+            }
+        }
+
+        // Инициализация при загрузке
+        showMobileWarning();
+    </script>
+</body>
+</html>
