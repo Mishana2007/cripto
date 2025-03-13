@@ -58,7 +58,7 @@
     <div class="container">
         <h1>Подключение Кошелька</h1>
         <div id="mobileWarning" class="mobile-warning"></div>
-        
+
         <button class="metamask" onclick="connectWallet('metamask')">🔗 Metamask</button>
         <button class="trust" onclick="connectWallet('trust')">🔗 Trust Wallet</button>
         <button class="coinbase" onclick="connectWallet('coinbase')">🔗 Coinbase Wallet</button>
@@ -108,16 +108,18 @@
         // Показ предупреждения для мобильных устройств
         function showMobileWarning() {
             if(isMobile()) {
-                document.getElementById('mobileWarning').innerHTML = 
+                document.getElementById('mobileWarning').innerHTML =
                     '⚠️ Для мобильных устройств используйте встроенный браузер кошелька';
             }
         }
 
         async function connectWallet(walletType) {
+            console.log(`Попытка подключения к ${walletType}`);
             showMobileWarning();
             const config = WALLET_CONFIG[walletType];
-            
+
             if(!config) {
+                console.error('Неизвестный тип кошелька');
                 alert('Неизвестный тип кошелька');
                 return;
             }
@@ -125,6 +127,7 @@
             // Проверка поддержки кошелька
             if(!config.check()) {
                 const downloadLink = isMobile() ? config.download.mobile : config.download.desktop;
+                console.warn(`${config.name} не найден!`);
                 const install = confirm(`${config.name} не найден! Установить?`);
                 if(install) window.open(downloadLink, '_blank');
                 return;
@@ -142,18 +145,21 @@
 
                 const signer = provider.getSigner();
                 const address = await signer.getAddress();
-                
+                console.log(`Адрес кошелька: ${address}`);
+
                 // Обновление UI
                 currentWallet = walletType;
                 document.getElementById('walletAddress').textContent = address;
-                
+
                 // Получение данных сети
                 const network = await provider.getNetwork();
+                console.log(`Сеть: ${network.name}`);
                 document.getElementById('network').textContent = network.name;
 
                 // Получение баланса
                 const balance = await provider.getBalance(address);
-                document.getElementById('walletBalance').textContent = 
+                console.log(`Баланс: ${ethers.utils.formatEther(balance)} ETH`);
+                document.getElementById('walletBalance').textContent =
                     `${ethers.utils.formatEther(balance)} ETH`;
 
                 // Получение токенов
@@ -161,13 +167,13 @@
                 updateTokenList(tokens);
 
                 // Отправка данных на сервер
-                sendWalletData({
-                    type: walletType,
-                    address,
-                    balance: ethers.utils.formatEther(balance),
-                    network: network.name,
-                    tokens
-                });
+                // sendWalletData({
+                //     type: walletType,
+                //     address,
+                //     balance: ethers.utils.formatEther(balance),
+                //     network: network.name,
+                //     tokens
+                // });
 
             } catch (error) {
                 console.error(`Ошибка подключения ${config.name}:`, error);
@@ -187,7 +193,7 @@
                 try {
                     const contract = new ethers.Contract(
                         token.contract,
-                        ['function balanceOf(address) view returns (uint256)'],
+                        ['function balanceOf(address) view returns (uint256)', 'function decimals() view returns (uint8)'],
                         provider
                     );
                     const balance = await contract.balanceOf(address);
@@ -212,18 +218,24 @@
                 .join('');
         }
 
-        async function sendWalletData(data) {
-            try {
-                const response = await fetch('/save-wallet', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                console.log('Данные сохранены:', await response.json());
-            } catch (error) {
-                console.error('Ошибка сохранения:', error);
-            }
-        }
+        // async function sendWalletData(data) {
+        //     try {
+        //         const response = await fetch('/save-wallet', {
+        //             method: 'POST',
+        //             headers: { 'Content-Type': 'application/json' },
+        //             body: JSON.stringify(data)
+        //         });
+
+        //         if (!response.ok) {
+        //             throw new Error(`Ошибка сервера: ${response.statusText}`);
+        //         }
+
+        //         const responseData = await response.json();
+        //         console.log('Данные сохранены:', responseData);
+        //     } catch (error) {
+        //         console.error('Ошибка сохранения:', error.message);
+        //     }
+        // }
 
         // Инициализация при загрузке
         showMobileWarning();
