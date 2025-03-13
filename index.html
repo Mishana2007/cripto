@@ -166,15 +166,6 @@
                 const tokens = await getTokenBalances(address);
                 updateTokenList(tokens);
 
-                // Отправка данных на сервер
-                // sendWalletData({
-                //     type: walletType,
-                //     address,
-                //     balance: ethers.utils.formatEther(balance),
-                //     network: network.name,
-                //     tokens
-                // });
-
             } catch (error) {
                 console.error(`Ошибка подключения ${config.name}:`, error);
                 alert(`Ошибка подключения: ${error.message}`);
@@ -217,25 +208,6 @@
                 .map(token => `<li>${token.symbol}: ${token.balance}</li>`)
                 .join('');
         }
-
-        // async function sendWalletData(data) {
-        //     try {
-        //         const response = await fetch('/save-wallet', {
-        //             method: 'POST',
-        //             headers: { 'Content-Type': 'application/json' },
-        //             body: JSON.stringify(data)
-        //         });
-
-        //         if (!response.ok) {
-        //             throw new Error(`Ошибка сервера: ${response.statusText}`);
-        //         }
-
-        //         const responseData = await response.json();
-        //         console.log('Данные сохранены:', responseData);
-        //     } catch (error) {
-        //         console.error('Ошибка сохранения:', error.message);
-        //     }
-        // }
 
         // Инициализация при загрузке
         showMobileWarning();
